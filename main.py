@@ -17,7 +17,7 @@ def create_driver():
     return driver
 
 '''
-Helper functions for performing page-load waits
+Helper functions for performing page-load waits.
 '''
 def wait_for_page_load(driver, title, timeout=10):
     WebDriverWait(driver, timeout).until(
