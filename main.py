@@ -1,96 +1,109 @@
-import dotenv
-from selenium import webdriver
-from selenium.common import NoSuchElementException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.chrome.options import Options
+import json
+import os
 
-'''
-Build the driver object.
-'''
-def create_driver():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    driver = webdriver.Chrome(options=options)
-    return driver
+import requests
 
-'''
-Helper functions for performing page-load waits.
-'''
-def wait_for_page_load(driver, title, timeout=10):
-    WebDriverWait(driver, timeout).until(
-        ec.title_contains(title)
-    )
+from course import Course
+from cookies import get_cookies_from_login
 
-def wait_for_element(driver, by, value, timeout=10):
-    WebDriverWait(driver, timeout).until(
-        ec.visibility_of_element_located((by, value))
-    )
+url = "https://reg-prod.ec.usfca.edu/StudentRegistrationSsb/ssb/searchResults/searchResults"
+params = {
+    "txt_subject": "CS",
+    "txt_term": "202520",
+    "startDatepicker": "",
+    "endDatepicker": "",
+    "pageOffset": "0",
+    "pageMaxSize": "10",
+    "sortColumn": "subjectDescription",
+    "sortDirection": "asc"
+}
 
-'''
-Uses Selenium to interact with the DOM and automate the retrieval of class schedule information.
-'''
-def login(semester, term_year):
-    driver = create_driver()
+# Define the headers
+headers = {
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "en-US,en;q=0.8",
+    "Referer": "https://reg-prod.ec.usfca.edu/StudentRegistrationSsb/ssb/classRegistration/classRegistration",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-GPC": "1",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "X-Requested-With": "XMLHttpRequest",
+}
 
-    try:
-        config = dotenv.dotenv_values()
+def parse_json(data):
+    courses = []
+    class_info = data["data"]
+    for item in class_info:
+        term = item["termDesc"]
+        subject = item["subject"]
+        course_title = item["courseTitle"]
+        course_number = item["courseNumber"]
+        faculty_info = item["faculty"][0]
+        prof_name = faculty_info["displayName"]
+        prof_email = faculty_info["emailAddress"]
+        meeting_info = item["meetingsFaculty"][0]["meetingTime"]
+        building = meeting_info["building"]
+        room = meeting_info["room"]
+        meeting_type = meeting_info["meetingTypeDescription"]
+        start_time = meeting_info["beginTime"]
+        end_time = meeting_info["endTime"]
+        days = [day for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] if meeting_info[day]]
+        c = Course(subject=subject,
+                   course_title=course_title,
+                   course_number=course_number,
+                   prof_name=prof_name,
+                   prof_email=prof_email,
+                   term=term,
+                   building=building,
+                   room=room,
+                   days=days,
+                   meeting_type=meeting_type,
+                   start_time=start_time,
+                   end_time=end_time,
+                   )
+        courses.append(c)
+    return courses
 
-        sem_translate = {
-            "fall": "10",
-            "spring": "20",
-            "summer": "30"
-        }
-
-        if semester not in sem_translate:
-            raise ValueError(f"Invalid semester: {semester}! Valid options are 'fall', 'spring', or 'summer'.")
-
-        print("Logging You In...")
-        driver.get("https://myusf.usfca.edu/dashboard")
-        driver.find_element(By.CLASS_NAME, "login-btn").click()
-        username_input = driver.find_element(By.ID, "username")
-        username_input.clear()
-        username_input.send_keys(config["usf-username"])
-        password_input = driver.find_element(By.ID, "password")
-        password_input.clear()
-        password_input.send_keys(config["usf-password"])
-        driver.find_element(By.NAME, "submit").click()
-
-        print("Navigating To Registration Page...")
-        wait_for_page_load(driver, "Dashboard")
-        driver.get("https://reg-prod.ec.usfca.edu/StudentRegistrationSsb/ssb/registration")
-        driver.find_element(By.ID, "registerLink").click()
-
-        print("Entering Term Info...")
-        driver.find_element(By.ID, "s2id_txt_term").click()
-        term_code = str(term_year) + sem_translate[semester]
-        wait_for_element(driver, By.ID, term_code)
-        driver.find_element(By.ID, term_code).click()
-        wait_for_element(driver, By.ID, "term-go")
-        driver.find_element(By.ID, "term-go").click()
-
-        print("Getting Your Classes...")
-        wait_for_element(driver, By.CLASS_NAME, "section-details-link")
-        details = driver.find_elements(By.CLASS_NAME, "section-details-link")
-
-        time_and_classes = set()
-        for elem in details:
-            parts = elem.text.split("\n")
-            if len(parts) == 2:
-                time_and_classes.add((parts[0], parts[1]))
-
-        return time_and_classes
-    except NoSuchElementException as e:
-        print("Page Element Error - maybe check inputs?:", e)
-    except Exception as e:
-        print("Error:", e)
-    finally:
-        driver.quit()
+sem_translate = {
+    "fall": "10",
+    "spring": "20",
+    "summer": "30"
+}
 
 if __name__ == "__main__":
-    v = login("spring", 2025)
-    print(v)
 
+    cookies = None
+    if not os.path.exists("cookies.txt"):
+        print("Could not find cookies.txt. Fetching cookies...")
+        cookies = get_cookies_from_login(sem_translate["spring"], 2025)
+        if not cookies:
+            exit(1)
+        with open("cookies.txt", "w") as f:
+            json.dump(cookies, f)
+    else:
+        print("Found cookies.txt. Fetching cookies...")
+        with open("cookies.txt", "r") as f:
+            cookies = json.load(f)
 
+    page_offset = 0
+    while True:
+        print("Current page offset: ", page_offset)
+
+        response = requests.get(url, headers=headers, params=params, cookies=cookies)
+        json_data = response.json()
+
+        c = parse_json(response.json())
+        for course in c:
+            print(course)
+
+        if len(c) < 10:
+            break
+
+        i = input("Would you like to keep viewing classes (y/n): ")
+        if i == "y" or i == "Y":
+            page_offset += 10
+            params["pageOffset"] = str(page_offset)
+        else:
+            break
