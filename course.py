@@ -24,6 +24,8 @@ class Course:
         self.meeting_type = meeting_type
 
         def twenty_four_to_twelve(time):
+            if not time:
+                return "N/A"
             hour = int(time[:2])
             if hour > 12:
                 return str(hour - 12) + ":" + time[2:] + "PM"

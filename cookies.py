@@ -34,7 +34,7 @@ def wait_for_element(driver, by, value, timeout=10):
 '''
 Uses Selenium to interact with the DOM and automate the retrieval of class schedule information.
 '''
-def get_cookies_from_login(semester, term_year):
+def get_cookies_from_login(term_code):
     driver = create_driver()
 
     try:
@@ -74,7 +74,6 @@ def get_cookies_from_login(semester, term_year):
 
         print("Entering Term Info...")
         driver.find_element(By.ID, "s2id_txt_term").click()
-        term_code = str(term_year) + semester
         wait_for_element(driver, By.ID, term_code)
         driver.find_element(By.ID, term_code).click()
         wait_for_element(driver, By.ID, "term-go")

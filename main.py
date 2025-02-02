@@ -7,6 +7,7 @@ from course import Course
 from cookies import get_cookies_from_login
 
 url = "https://reg-prod.ec.usfca.edu/StudentRegistrationSsb/ssb/searchResults/searchResults"
+
 params = {
     "txt_subject": "CS",
     "txt_term": "202520",
@@ -18,7 +19,6 @@ params = {
     "sortDirection": "asc"
 }
 
-# Define the headers
 headers = {
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -66,18 +66,20 @@ def parse_json(data):
         courses.append(c)
     return courses
 
-sem_translate = {
-    "fall": "10",
-    "spring": "20",
-    "summer": "30"
-}
+def get_semester_code(semester_name, year):
+    sem_translate = {
+        "fall": "10",
+        "spring": "20",
+        "summer": "30"
+    }
+    return year + sem_translate[semester_name]
 
 if __name__ == "__main__":
 
     cookies = None
     if not os.path.exists("cookies.txt"):
         print("Could not find cookies.txt. Fetching cookies...")
-        cookies = get_cookies_from_login(sem_translate["spring"], 2025)
+        cookies = get_cookies_from_login(get_semester_code("spring", "2025"))
         if not cookies:
             exit(1)
         with open("cookies.txt", "w") as f:
@@ -89,8 +91,6 @@ if __name__ == "__main__":
 
     page_offset = 0
     while True:
-        print("Current page offset: ", page_offset)
-
         response = requests.get(url, headers=headers, params=params, cookies=cookies)
         json_data = response.json()
 
